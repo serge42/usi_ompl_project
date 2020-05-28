@@ -8,10 +8,10 @@
 namespace oc = ompl::control;
 namespace ob = ompl::base;
 
-class TestPropagator : public oc::StatePropagator
+class CarStatePropagator : public oc::StatePropagator
 {
     public:
-        TestPropagator(const oc::SpaceInformationPtr &si) : oc::StatePropagator(si)
+        CarStatePropagator(const oc::SpaceInformationPtr &si) : oc::StatePropagator(si)
         {
             space_ = si->getStateSpace();
             carLength_ = 0.2;

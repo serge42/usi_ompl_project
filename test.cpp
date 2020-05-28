@@ -10,7 +10,7 @@
 #include <fstream>
 #include <iostream>
 
-#include "test_propagator.cpp"
+// #include "CarStatePropagator.cpp"
 
 namespace ob = ompl::base;
 namespace oc = ompl::control;
@@ -106,20 +106,8 @@ void KinematicCarODE(const oc::ODESolver::StateType& q, const oc::Control* contr
     // Zero out qdot
     qdot.resize (q.size(), 0);
 
-    // reduce steering between (-45,45)
-    // static double min_steer = 1000000000.0;
-    // static double max_steer = -1000000000.0;
+    // reduce steering between ()
     double steer = u[1];
-    // if (steer < min_steer) 
-    // {
-    //     min_steer = steer;
-    //     std::cout << "min steer received " << min_steer << std::endl;
-    // }
-    // if (steer > max_steer)
-    // {
-    //     max_steer = steer;
-    //     std::cout << "max steer recieved: " << max_steer << std::endl;
-    // }
     if (steer > -0.26) steer = -0.26;
     else if (steer < -0.52) steer = -0.52;
 
@@ -192,6 +180,8 @@ void planWithSimpleSetup()
     goal->setYaw(0.0);
 
     ss.setStartAndGoalStates(start, goal, 0.05);
+
+    ss.setPlanner(std::make_shared<oc::RRT>(ss.getSpaceInformation()));
 
     ss.setup();
 
