@@ -6,7 +6,12 @@
 #include <omplapp/apps/DynamicCarPlanning.h>
 #include <omplapp/config.h>
 #include <boost/math/constants/constants.hpp>
+// #include <boost/units/quantity.hpp>
+// #include <boost/units/systems/si/plane_angle.hpp>
+// #include <boost/units/systems/angle/degrees.hpp>
+// #include <boost/units/base_units/angle/degree.hpp>
 
+#include <stdlib.h>
 #include <fstream>
 #include <iostream>
 
@@ -14,6 +19,8 @@
 
 namespace ob = ompl::base;
 namespace oc = ompl::control;
+namespace og = ompl::geometric;
+
 
 class DemoControlSpace : public oc::RealVectorControlSpace
 {
@@ -22,6 +29,11 @@ class DemoControlSpace : public oc::RealVectorControlSpace
         {
         }
 };
+
+double deg2Rad(double angleInDegrees)
+{
+    return angleInDegrees * boost::math::constants::pi<double>() / 180;
+}
 
 void kinematicCarSetup(ompl::app::KinematicCarPlanning &setup)
 {
@@ -45,7 +57,7 @@ void kinematicCarSetup(ompl::app::KinematicCarPlanning &setup)
     setup.setStartAndGoalStates(start, goal, .1);
 
     // Create state propagator
-    // TestPropagator propagator; 
+    // CarStatePropagator propagator; 
     // setup.setStatePropagator(0);
 
 
@@ -106,10 +118,12 @@ void KinematicCarODE(const oc::ODESolver::StateType& q, const oc::Control* contr
     // Zero out qdot
     qdot.resize (q.size(), 0);
 
-    // reduce steering between ()
+    // reduce steering between [-30;-15]
     double steer = u[1];
-    if (steer > -0.26) steer = -0.26;
-    else if (steer < -0.52) steer = -0.52;
+    double rad_max = deg2Rad(-15);
+    double rad_min = deg2Rad(-30);
+    if (steer > rad_max) steer = rad_max;
+    else if (steer < rad_min) steer = rad_min;
 
     qdot[0] = 2 * u[0] * cos(theta);
     qdot[1] = 2 * u[0] * sin(theta);
@@ -135,51 +149,19 @@ bool isStateValid(const oc::SpaceInformation *si, const ob::State *state)
     return true;
 }
 
-void planWithSimpleSetup()
+void planWithSimpleSetup(oc::SimpleSetup &ss)
 {
-    auto space(std::make_shared<ob::SE2StateSpace>());
-
-    ob::RealVectorBounds bounds(2);
-    bounds.setLow(-25);
-    bounds.setHigh(25);
-
-    space->setBounds(bounds);
-
-    // create control space
-    // auto cspace(std::make_shared<control::RealVectorControlSpace>(space, 2));
-    auto cspace(std::make_shared<DemoControlSpace>(space));
-    // set bounds
-    ob::RealVectorBounds cbounds(2);
-    cbounds.setLow(-1.0); // limits steering angle AND speed
-    cbounds.setHigh(1.0);
-
-    cspace->setBounds(cbounds);
-
-    // define simple setup class
-    oc::SimpleSetup ss(cspace);
     // set state validity checking for this space
     oc::SpaceInformation *si = ss.getSpaceInformation().get();
     ss.setStateValidityChecker(
         [si](const ob::State *state) { return isStateValid(si, state); });
     
     // Settin propagation routine for this space: does not use ODESolver
-    // ss.setStatePropagator(std::make_shared<TestPropagator>(ss.getSpaceInformation()));
+    // ss.setStatePropagator(std::make_shared<CarStatePropagator>(ss.getSpaceInformation()));
 
     // Using ODESolver to propagate the system. Calls KinematicCarPostIntegration to normalize the orientation values after integration has finished.
     auto odeSolver(std::make_shared<oc::ODEBasicSolver<>>(ss.getSpaceInformation(), &KinematicCarODE));
     ss.setStatePropagator(oc::ODESolver::getStatePropagator(odeSolver, &KinematicCarPostIntegration));
-
-    ob::ScopedState<ob::SE2StateSpace> start(space);
-    start->setX(-5.0);
-    start->setY(0.0);
-    start->setYaw(0.0);
-
-    ob::ScopedState<ob::SE2StateSpace> goal(space);
-    goal->setX(15.0);
-    goal->setY(25.0);
-    goal->setYaw(0.0);
-
-    ss.setStartAndGoalStates(start, goal, 0.05);
 
     ss.setPlanner(std::make_shared<oc::RRT>(ss.getSpaceInformation()));
 
@@ -205,9 +187,59 @@ void planWithSimpleSetup()
         std::cout << "No solution found" << std::endl;
 }
 
-int main(int /* argc */, char** /* argv */)
+int main(int argc, char** argv)
 {
-    planWithSimpleSetup();
+    if (argc < 6) 
+    {
+        std::cout << "Usage: path_planner startX startY startYaw goalX goalY goalYaw" << std::endl;
+        return 0;
+    }
+
+    int i = 0;
+    double startX = atof(argv[++i]);
+    double startY = atof(argv[++i]);
+    double startYaw = atof(argv[++i]);
+    double goalX = atof(argv[++i]);
+    double goalY = atof(argv[++i]);
+    double goalYaw = atof(argv[++i]);
+    std::cout << startX << " " << goalYaw << std::endl;
+
+    // Create SimpleSetup
+    auto space(std::make_shared<ob::SE2StateSpace>());
+
+    ob::RealVectorBounds bounds(2);
+    bounds.setLow(-25);
+    bounds.setHigh(25);
+
+    space->setBounds(bounds);
+
+    // create control space
+    // auto cspace(std::make_shared<control::RealVectorControlSpace>(space, 2));
+    auto cspace(std::make_shared<DemoControlSpace>(space));
+    // set bounds
+    ob::RealVectorBounds cbounds(2);
+    cbounds.setLow(-1.0); // limits steering angle AND speed
+    cbounds.setHigh(1.0);
+
+    cspace->setBounds(cbounds);
+
+    // define simple setup class
+    oc::SimpleSetup ss(cspace);
+
+    // Set start and goal
+    ob::ScopedState<ob::SE2StateSpace> start(space);
+    start->setX(startX);
+    start->setY(startY);
+    start->setYaw(startYaw);
+
+    ob::ScopedState<ob::SE2StateSpace> goal(space);
+    goal->setX(goalX);
+    goal->setY(goalY);
+    goal->setYaw(goalYaw);
+
+    ss.setStartAndGoalStates(start, goal, 0.05);
+
+    planWithSimpleSetup(ss);
     return 0;
 }
 
