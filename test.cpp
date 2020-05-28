@@ -107,13 +107,25 @@ void KinematicCarODE(const oc::ODESolver::StateType& q, const oc::Control* contr
     qdot.resize (q.size(), 0);
 
     // reduce steering between (-45,45)
+    // static double min_steer = 1000000000.0;
+    // static double max_steer = -1000000000.0;
     double steer = u[1];
-    if (steer > 0.0) steer = 0.0;
-    else if (steer < -30.0) steer = -30.0;
+    // if (steer < min_steer) 
+    // {
+    //     min_steer = steer;
+    //     std::cout << "min steer received " << min_steer << std::endl;
+    // }
+    // if (steer > max_steer)
+    // {
+    //     max_steer = steer;
+    //     std::cout << "max steer recieved: " << max_steer << std::endl;
+    // }
+    if (steer > -0.26) steer = -0.26;
+    else if (steer < -0.52) steer = -0.52;
 
-    qdot[0] = u[0] * cos(theta);
-    qdot[1] = u[0] * sin(theta);
-    qdot[2] = u[0] * tan(steer) / carLength;
+    qdot[0] = 2 * u[0] * cos(theta);
+    qdot[1] = 2 * u[0] * sin(theta);
+    qdot[2] = 2 * u[0] * tan(steer) / carLength;
 }
 
 void KinematicCarPostIntegration(const ob::State* /*state*/, const oc::Control* /*control*/, const double /*duration*/, ob::State *result)
@@ -150,8 +162,8 @@ void planWithSimpleSetup()
     auto cspace(std::make_shared<DemoControlSpace>(space));
     // set bounds
     ob::RealVectorBounds cbounds(2);
-    cbounds.setLow(-5.0);
-    cbounds.setHigh(5.0);
+    cbounds.setLow(-1.0); // limits steering angle AND speed
+    cbounds.setHigh(1.0);
 
     cspace->setBounds(cbounds);
 
