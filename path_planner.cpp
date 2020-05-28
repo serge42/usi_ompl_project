@@ -4,6 +4,7 @@
 #include <ompl/tools/benchmark/Benchmark.h>
 #include <omplapp/apps/KinematicCarPlanning.h>
 #include <omplapp/apps/DynamicCarPlanning.h>
+#include <ompl/base/spaces/SE2StateSpace.h>
 #include <omplapp/config.h>
 #include <boost/math/constants/constants.hpp>
 // #include <boost/units/quantity.hpp>
@@ -19,6 +20,10 @@
 // Max and min steer of car are fixed
 #define MAX_STEER -15.0
 #define MIN_STEER -30.0
+#define STATESPACE_BOUND_HIGH 50.0
+#define STATESPACE_BOUND_LOW -STATESPACE_BOUND_HIGH
+#define CSPACE_BOUND_HIGH 1.0
+#define CSPACE_BOUND_LOW -CSPACE_BOUND_HIGH
 
 namespace ob = ompl::base;
 namespace oc = ompl::control;
@@ -128,9 +133,9 @@ void KinematicCarODE(const oc::ODESolver::StateType& q, const oc::Control* contr
     if (steer > rad_max) steer = rad_max;
     else if (steer < rad_min) steer = rad_min;
 
-    qdot[0] = 2 * u[0] * cos(theta);
-    qdot[1] = 2 * u[0] * sin(theta);
-    qdot[2] = 2 * u[0] * tan(steer) / carLength;
+    qdot[0] = u[0] * cos(theta);
+    qdot[1] = u[0] * sin(theta);
+    qdot[2] = u[0] * tan(steer) / carLength;
 }
 
 void KinematicCarPostIntegration(const ob::State* /*state*/, const oc::Control* /*control*/, const double /*duration*/, ob::State *result)
@@ -170,7 +175,7 @@ void planWithSimpleSetup(oc::SimpleSetup &ss)
 
     ss.setup();
 
-    ob::PlannerStatus solved = ss.solve(10.0);
+    ob::PlannerStatus solved = ss.solve(50.0);
     if(solved)
     {
         std::cout << "Found solution:" << std::endl;
@@ -205,14 +210,22 @@ int main(int argc, char** argv)
     double goalX = atof(argv[++i]);
     double goalY = atof(argv[++i]);
     double goalYaw = atof(argv[++i]);
-    std::cout << startX << " " << goalYaw << std::endl;
 
+    if (startX > STATESPACE_BOUND_HIGH or startY > STATESPACE_BOUND_HIGH or startX < STATESPACE_BOUND_LOW or startY < STATESPACE_BOUND_LOW
+        or goalX > STATESPACE_BOUND_HIGH or goalY > STATESPACE_BOUND_HIGH or goalX < STATESPACE_BOUND_LOW or goalY < STATESPACE_BOUND_LOW)
+        {
+            std::cout << "startX, startY, goalX, goalY should belong to the interval [" << STATESPACE_BOUND_LOW << "; " << STATESPACE_BOUND_HIGH << "]" << std::endl;
+            return 1;
+        }
+
+    // std::cout << startX << " " << goalX << std::endl;
     // Create SimpleSetup
     auto space(std::make_shared<ob::SE2StateSpace>());
+    
 
     ob::RealVectorBounds bounds(2);
-    bounds.setLow(-25);
-    bounds.setHigh(25);
+    bounds.setLow(STATESPACE_BOUND_LOW);
+    bounds.setHigh(STATESPACE_BOUND_HIGH);
 
     space->setBounds(bounds);
 
@@ -221,8 +234,8 @@ int main(int argc, char** argv)
     auto cspace(std::make_shared<DemoControlSpace>(space));
     // set bounds
     ob::RealVectorBounds cbounds(2);
-    cbounds.setLow(-1.0); // limits steering angle AND speed
-    cbounds.setHigh(1.0);
+    cbounds.setLow(CSPACE_BOUND_LOW); // limits steering angle AND speed
+    cbounds.setHigh(CSPACE_BOUND_HIGH);
 
     cspace->setBounds(cbounds);
 
