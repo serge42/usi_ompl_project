@@ -106,9 +106,14 @@ void KinematicCarODE(const oc::ODESolver::StateType& q, const oc::Control* contr
     // Zero out qdot
     qdot.resize (q.size(), 0);
 
+    // reduce steering between (-45,45)
+    double steer = u[1];
+    if (steer > 0.0) steer = 0.0;
+    else if (steer < -30.0) steer = -30.0;
+
     qdot[0] = u[0] * cos(theta);
     qdot[1] = u[0] * sin(theta);
-    qdot[2] = u[0] * tan(u[1]) / carLength;
+    qdot[2] = u[0] * tan(steer) / carLength;
 }
 
 void KinematicCarPostIntegration(const ob::State* /*state*/, const oc::Control* /*control*/, const double /*duration*/, ob::State *result)
