@@ -16,6 +16,9 @@
 #include <iostream>
 
 // #include "CarStatePropagator.cpp"
+// Max and min steer of car are fixed
+#define MAX_STEER -15.0
+#define MIN_STEER -30.0
 
 namespace ob = ompl::base;
 namespace oc = ompl::control;
@@ -120,8 +123,8 @@ void KinematicCarODE(const oc::ODESolver::StateType& q, const oc::Control* contr
 
     // reduce steering between [-30;-15]
     double steer = u[1];
-    double rad_max = deg2Rad(-15);
-    double rad_min = deg2Rad(-30);
+    double rad_max = deg2Rad(MAX_STEER);
+    double rad_min = deg2Rad(MIN_STEER);
     if (steer > rad_max) steer = rad_max;
     else if (steer < rad_min) steer = rad_min;
 
