@@ -18,6 +18,7 @@
 
 // #include "CarStatePropagator.cpp"
 // Max and min steer of car are fixed
+#define ROBOT_LENGTH 1
 #define MAX_STEER -15.0
 #define MIN_STEER -30.0
 #define STATESPACE_BOUND_HIGH 50.0
@@ -38,6 +39,10 @@ class DemoControlSpace : public oc::RealVectorControlSpace
         }
 };
 
+void KinematicCarODE(const oc::ODESolver::StateType& q, const oc::Control* control, oc::ODESolver::StateType& qdot);
+void KinematicCarPostIntegration(const ob::State* /*state*/, const oc::Control* /*control*/, const double /*duration*/, ob::State *result);
+bool isStateValid(const oc::SpaceInformation *si, const ob::State *state);
+
 double deg2Rad(double angleInDegrees)
 {
     return angleInDegrees * boost::math::constants::pi<double>() / 180;
@@ -47,10 +52,18 @@ void kinematicCarSetup(ompl::app::KinematicCarPlanning &setup)
 {
     ob::StateSpacePtr SE2(setup.getStateSpace());
 
-    ob::RealVectorBounds bounds(2);
-    bounds.setLow(-10);
-    bounds.setHigh(10);
-    SE2->as<ob::SE2StateSpace>()->setBounds(bounds);
+    // ob::RealVectorBounds bounds(2);
+    // bounds.setLow(-50);
+    // bounds.setHigh(50);
+    // SE2->as<ob::SE2StateSpace>()->setBounds(bounds);
+
+    // oc::SpaceInformation *si = setup.getSpaceInformation().get();
+    // setup.setStateValidityChecker(
+    //     [si](const ob::State *state) { return isStateValid(si, state); });
+
+    // Using ODESolver to propagate the system. Calls KinematicCarPostIntegration to normalize the orientation values after integration has finished.
+    auto odeSolver(std::make_shared<oc::ODEBasicSolver<>>(setup.getSpaceInformation(), &KinematicCarODE));
+    setup.setStatePropagator(oc::ODESolver::getStatePropagator(odeSolver, &KinematicCarPostIntegration));
 
     ob::ScopedState<ob::SE2StateSpace> start(SE2);
     start->setX(0);
@@ -60,7 +73,7 @@ void kinematicCarSetup(ompl::app::KinematicCarPlanning &setup)
     ob::ScopedState<ob::SE2StateSpace> goal(SE2);
     goal->setX(20);
     goal->setY(20);
-    goal->setYaw(boost::math::constants::pi<double>() * 10);
+    goal->setYaw(boost::math::constants::pi<double>());
 
     setup.setStartAndGoalStates(start, goal, .1);
 
@@ -68,6 +81,10 @@ void kinematicCarSetup(ompl::app::KinematicCarPlanning &setup)
     // CarStatePropagator propagator; 
     // setup.setStatePropagator(0);
 
+    std::string env_fname = "./ompl_install/resources/2D/Maze_planar_env.dae";
+    std::string robot_fname = "./ompl_install/resources/2D/car1_planar_robot.dae";
+    setup.setEnvironmentMesh(env_fname);
+    setup.setRobotMesh(robot_fname);
 
     setup.setPlanner(std::make_shared<oc::KPIECE1>(setup.getSpaceInformation()));
     std::vector<double> cs(2);
@@ -122,7 +139,7 @@ void KinematicCarODE(const oc::ODESolver::StateType& q, const oc::Control* contr
 {
     const double *u = control->as<oc::RealVectorControlSpace::ControlType>()->values;
     const double theta = q[2];
-    double carLength = 1;
+    double carLength = ROBOT_LENGTH;
     // Zero out qdot
     qdot.resize (q.size(), 0);
 
@@ -154,6 +171,9 @@ bool isStateValid(const oc::SpaceInformation *si, const ob::State *state)
 
     const auto *rot = se2state->as<ob::SO2StateSpace::StateType>(1);
 
+    if (pos->values[0] < 10 && pos->values[1] > 1 && pos->values[1] < 10)
+        return false;
+
     return true;
 }
 
@@ -176,8 +196,6 @@ void planWithSimpleSetup(oc::SimpleSetup &ss, double time_limit, int planner_idx
     else
         ss.setPlanner(std::make_shared<oc::RRT>(ss.getSpaceInformation()));
 
-    // Try to import mesh
-    // TODO
     ss.setup();
 
     ob::PlannerStatus solved;
@@ -207,7 +225,7 @@ void planWithSimpleSetup(oc::SimpleSetup &ss, double time_limit, int planner_idx
         std::cout << "No solution found" << std::endl;
 }
 
-int main(int argc, char** argv)
+int ompl_planer(int argc, char** argv)
 {
     if (argc < 7) 
     {
@@ -220,10 +238,10 @@ int main(int argc, char** argv)
     int i = 0;
     double startX = atof(argv[++i]);
     double startY = atof(argv[++i]);
-    double startYaw = atof(argv[++i]);
+    double startYaw = deg2Rad( atof(argv[++i]) );
     double goalX = atof(argv[++i]);
     double goalY = atof(argv[++i]);
-    double goalYaw = atof(argv[++i]);
+    double goalYaw = deg2Rad( atof(argv[++i]) );
 
     double time_limit = 50.0;
     int planner_idx = 0;
@@ -287,50 +305,38 @@ int main(int argc, char** argv)
     return 0;
 }
 
-// int main(int argc, char** /* argv */)
-// {
-//     app::KinematicCarPlanning regularCar;
-//     // control::ControlSpace space; 
-
-//     kinematicCarSetup(regularCar);
-
-//     // If any command line args are given, solve the problem multiple times with different planners
-//     // and collect benchmark stats. Otherwise, solve the problem once for each car type and print the path.
-//     if (argc > 1)
-//         kinematicCarBenchmark(regularCar);
-//     else
-//         kinematicCarDemo(regularCar);
+int omplapp_planner(int argc, char** /* argv */)
+{
+    // Create cspace
+    auto space(std::make_shared<ob::SE2StateSpace>());
     
-//     return 0;
-// }
+    ob::RealVectorBounds bounds(2);
+    bounds.setLow(STATESPACE_BOUND_LOW);
+    bounds.setHigh(STATESPACE_BOUND_HIGH);
 
-// int main()
-// {
-//     // plan in SE2
-//     app::SE2RigidBodyPlanning setup;
+    space->setBounds(bounds);
 
-//     // Load robot
-//     std::string robot_fname = std::string(OMPLAPP_RESOURCE_DIR) + "/2D/car1_planar_robot.dae";
-//     std::string env_fname = std::string(OMPLAPP_RESOURCE_DIR) + "/2D/Maze_planar_env.dae";
-//     setup.setRobotMesh(robot_fname);
-//     setup.setEnvironmentMesh(env_fname);
+    // create control space
+    // auto cspace(std::make_shared<oc::RealVectorControlSpace>(space, 2));
+    auto cspace(std::make_shared<DemoControlSpace>(space));
+    ompl::app::KinematicCarPlanning regularCar(cspace);
+    // control::ControlSpace space; 
 
-//     // define starting state
-//     base::ScopedState<base::SE2StateSpace> start(setup.getSpaceInformation());
-//     start->setX(0.0);
-//     start->setY(0.0);
+    kinematicCarSetup(regularCar);
 
-//     // define goal
-//     base::ScopedState<base::SE2StateSpace> goal(start);
-//     goal->setX(26.0);
-//     goal->setY(0.0);
+    // If any command line args are given, solve the problem multiple times with different planners
+    // and collect benchmark stats. Otherwise, solve the problem once for each car type and print the path.
+    if (argc > 1)
+        kinematicCarBenchmark(regularCar);
+    else
+        kinematicCarDemo(regularCar);
+    
+    return 0;
+}
 
-//     // set start & goal state
-//     setup.setStartAndGoalStates(start, goal);
-
-//     // attempt to solve the problem and print it to screen if a solution is found
-//     if(setup.solve())
-//         setup.getSolutionPath().print(std::cout);
-
-//     return 0;
-// }
+int main(int argc, char** argv)
+{
+    if (argc > 1)
+        return ompl_planer(argc, argv);
+    return omplapp_planner(argc, argv);
+}
