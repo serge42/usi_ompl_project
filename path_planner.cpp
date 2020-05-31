@@ -57,9 +57,9 @@ void kinematicCarSetup(ompl::app::KinematicCarPlanning &setup)
     // bounds.setHigh(50);
     // SE2->as<ob::SE2StateSpace>()->setBounds(bounds);
 
-    // oc::SpaceInformation *si = setup.getSpaceInformation().get();
-    // setup.setStateValidityChecker(
-    //     [si](const ob::State *state) { return isStateValid(si, state); });
+    oc::SpaceInformation *si = setup.getSpaceInformation().get();
+    setup.setStateValidityChecker(
+        [si](const ob::State *state) { return true; });
 
     // Using ODESolver to propagate the system. Calls KinematicCarPostIntegration to normalize the orientation values after integration has finished.
     auto odeSolver(std::make_shared<oc::ODEBasicSolver<>>(setup.getSpaceInformation(), &KinematicCarODE));
@@ -76,10 +76,6 @@ void kinematicCarSetup(ompl::app::KinematicCarPlanning &setup)
     goal->setYaw(0.61);
 
     setup.setStartAndGoalStates(start, goal, 0.1);
-
-    // Create state propagator
-    // CarStatePropagator propagator; 
-    // setup.setStatePropagator(0);
 
     std::string env_fname = "./ompl_install/resources/2D/Barriers_easy_env.dae";
     std::string robot_fname = "./ompl_install/resources/2D/car1_planar_robot.dae";
@@ -327,10 +323,10 @@ int omplapp_planner(int argc, char** argv)
 
     // If any command line args are given, solve the problem multiple times with different planners
     // and collect benchmark stats. Otherwise, solve the problem once for each car type and print the path.
-    if (argc > 1)
-        kinematicCarBenchmark(regularCar);
-    else
-        kinematicCarDemo(regularCar);
+    // if (argc > 1)
+    //     kinematicCarBenchmark(regularCar);
+    // else
+    kinematicCarDemo(regularCar);
     
     return 0;
 }
@@ -339,5 +335,7 @@ int main(int argc, char** argv)
 {
     if (argc > 1)
         return ompl_planer(argc, argv);
+
+    std::cout << "Starting OMPL.app implementation: \n" << std::endl;
     return omplapp_planner(argc, argv);
 }
