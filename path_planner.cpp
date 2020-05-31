@@ -157,7 +157,7 @@ bool isStateValid(const oc::SpaceInformation *si, const ob::State *state)
     return true;
 }
 
-void planWithSimpleSetup(oc::SimpleSetup &ss)
+void planWithSimpleSetup(oc::SimpleSetup &ss, double time_limit, int planner_idx)
 {
     // set state validity checking for this space
     oc::SpaceInformation *si = ss.getSpaceInformation().get();
@@ -171,11 +171,23 @@ void planWithSimpleSetup(oc::SimpleSetup &ss)
     auto odeSolver(std::make_shared<oc::ODEBasicSolver<>>(ss.getSpaceInformation(), &KinematicCarODE));
     ss.setStatePropagator(oc::ODESolver::getStatePropagator(odeSolver, &KinematicCarPostIntegration));
 
-    ss.setPlanner(std::make_shared<oc::RRT>(ss.getSpaceInformation()));
+    if (planner_idx == 0)
+        ss.setPlanner(std::make_shared<oc::KPIECE1>(ss.getSpaceInformation()));
+    else
+        ss.setPlanner(std::make_shared<oc::RRT>(ss.getSpaceInformation()));
 
+    // Try to import mesh
+    // TODO
     ss.setup();
 
-    ob::PlannerStatus solved = ss.solve(50.0);
+    ob::PlannerStatus solved;
+    if (time_limit > 0.0)
+        solved = ss.solve(time_limit);
+    else
+    {
+        ss.solve(ob::exactSolnPlannerTerminationCondition (ss.getProblemDefinition()));
+    }
+    
     if(solved)
     {
         std::cout << "Found solution:" << std::endl;
@@ -197,9 +209,11 @@ void planWithSimpleSetup(oc::SimpleSetup &ss)
 
 int main(int argc, char** argv)
 {
-    if (argc < 6) 
+    if (argc < 7) 
     {
-        std::cout << "Usage: path_planner startX startY startYaw goalX goalY goalYaw" << std::endl;
+        std::cout << "Usage: path_planner startX startY startYaw goalX goalY goalYaw [-time limit | -exact] [-planner id]" << std::endl;
+        std::cout << "-planner id: 0 KPIECE1, 1: RRT" << std::endl;
+        std::cout << "-exact: run planner until an exact solution is found." << std::endl;
         return 0;
     }
 
@@ -210,6 +224,20 @@ int main(int argc, char** argv)
     double goalX = atof(argv[++i]);
     double goalY = atof(argv[++i]);
     double goalYaw = atof(argv[++i]);
+
+    double time_limit = 50.0;
+    int planner_idx = 0;
+    while (argc > ++i)
+    {
+        char *arg = argv[i];
+        // std::cout << arg << std::endl;
+        if (strcmp(arg, "-time") == 0)
+            time_limit = atof(argv[++i]);
+        else if (strcmp(arg, "-exact") == 0)
+            time_limit = -1.0;
+        else if (strcmp(arg, "-planner") == 0)
+            planner_idx = atof(argv[++i]);
+    }
 
     if (startX > STATESPACE_BOUND_HIGH or startY > STATESPACE_BOUND_HIGH or startX < STATESPACE_BOUND_LOW or startY < STATESPACE_BOUND_LOW
         or goalX > STATESPACE_BOUND_HIGH or goalY > STATESPACE_BOUND_HIGH or goalX < STATESPACE_BOUND_LOW or goalY < STATESPACE_BOUND_LOW)
@@ -253,9 +281,9 @@ int main(int argc, char** argv)
     goal->setY(goalY);
     goal->setYaw(goalYaw);
 
-    ss.setStartAndGoalStates(start, goal, 0.05);
+    ss.setStartAndGoalStates(start, goal, 0.1);
 
-    planWithSimpleSetup(ss);
+    planWithSimpleSetup(ss, time_limit, planner_idx);
     return 0;
 }
 
