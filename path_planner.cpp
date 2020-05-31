@@ -18,7 +18,7 @@
 
 // #include "CarStatePropagator.cpp"
 // Max and min steer of car are fixed
-#define ROBOT_LENGTH 1
+#define ROBOT_LENGTH 1.0
 #define MAX_STEER -15.0
 #define MIN_STEER -30.0
 #define STATESPACE_BOUND_HIGH 50.0
@@ -66,25 +66,27 @@ void kinematicCarSetup(ompl::app::KinematicCarPlanning &setup)
     setup.setStatePropagator(oc::ODESolver::getStatePropagator(odeSolver, &KinematicCarPostIntegration));
 
     ob::ScopedState<ob::SE2StateSpace> start(SE2);
-    start->setX(0);
-    start->setY(0);
-    start->setYaw(0);
+    start->setX(50);
+    start->setY(-50);
+    start->setYaw(0.3);
 
     ob::ScopedState<ob::SE2StateSpace> goal(SE2);
-    goal->setX(20);
-    goal->setY(20);
-    goal->setYaw(boost::math::constants::pi<double>());
+    goal->setX(130);
+    goal->setY(-100);
+    goal->setYaw(0.61);
 
-    setup.setStartAndGoalStates(start, goal, .1);
+    setup.setStartAndGoalStates(start, goal, 0.1);
 
     // Create state propagator
     // CarStatePropagator propagator; 
     // setup.setStatePropagator(0);
 
-    std::string env_fname = "./ompl_install/resources/2D/Maze_planar_env.dae";
+    std::string env_fname = "./ompl_install/resources/2D/Barriers_easy_env.dae";
     std::string robot_fname = "./ompl_install/resources/2D/car1_planar_robot.dae";
     setup.setEnvironmentMesh(env_fname);
     setup.setRobotMesh(robot_fname);
+
+    // auto ccheck = setup.getGeometrySpecification();
 
     setup.setPlanner(std::make_shared<oc::KPIECE1>(setup.getSpaceInformation()));
     std::vector<double> cs(2);
@@ -96,7 +98,7 @@ void kinematicCarSetup(ompl::app::KinematicCarPlanning &setup)
 void kinematicCarDemo(ompl::app::KinematicCarPlanning &setup)
 {
     // Try to solve
-    if (setup.solve(20))
+    if (setup.solve(100))
     {
         // print the solution path: prints states along the paths and controls required to get from
         // one state to the next. 
@@ -139,7 +141,6 @@ void KinematicCarODE(const oc::ODESolver::StateType& q, const oc::Control* contr
 {
     const double *u = control->as<oc::RealVectorControlSpace::ControlType>()->values;
     const double theta = q[2];
-    double carLength = ROBOT_LENGTH;
     // Zero out qdot
     qdot.resize (q.size(), 0);
 
@@ -152,7 +153,7 @@ void KinematicCarODE(const oc::ODESolver::StateType& q, const oc::Control* contr
 
     qdot[0] = u[0] * cos(theta);
     qdot[1] = u[0] * sin(theta);
-    qdot[2] = u[0] * tan(steer) / carLength;
+    qdot[2] = u[0] * tan(steer) / ROBOT_LENGTH;
 }
 
 void KinematicCarPostIntegration(const ob::State* /*state*/, const oc::Control* /*control*/, const double /*duration*/, ob::State *result)
@@ -305,7 +306,7 @@ int ompl_planer(int argc, char** argv)
     return 0;
 }
 
-int omplapp_planner(int argc, char** /* argv */)
+int omplapp_planner(int argc, char** argv)
 {
     // Create cspace
     auto space(std::make_shared<ob::SE2StateSpace>());
